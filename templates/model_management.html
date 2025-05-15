@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Mô Hình - Clean Inbox AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Apply Inter font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Loading spinner animation */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1); /* Light gray border */
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border-left-color: #3b82f6; /* Blue color for spinner */
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Confusion Matrix Styling */
+        .confusion-matrix th,
+        .confusion-matrix td {
+            border: 1px solid #e2e8f0; /* Gray border */
+            padding: 0.5rem;
+            text-align: center;
+        }
+        .confusion-matrix th {
+            background-color: #f7fafc; /* Light gray background for headers */
+        }
+        /* Training Progress List Styling */
+        #trainingProgress li {
+            padding: 0.6rem 0;
+            border-bottom: 1px dashed #e2e8f0; /* Dashed border between steps */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        #trainingProgress li:last-child {
+            border-bottom: none; /* No border for the last item */
+        }
+        .step-main { display: flex; align-items: center; }
+        .status-icon { width: 20px; height: 20px; display: inline-block; margin-right: 0.75rem; flex-shrink: 0; }
+        .step-text { flex-grow: 1; }
+        .step-result { font-size: 0.75rem; color: #4b5563; /* Gray text */ margin-left: 1rem; text-align: right; font-style: italic; flex-shrink: 0; }
+        /* Status Icon Styling */
+        .status-pending .spinner { width: 16px; height: 16px; border-width: 3px; display: inline-block; vertical-align: middle; } /* Smaller spinner for pending */
+        .status-done .fa-check-circle { color: #10b981; } /* Green check */
+        .status-error .fa-times-circle { color: #ef4444; } /* Red cross */
+        /* Status Text Styling */
+        .status-pending .step-text { color: #374151; } /* Dark gray for pending */
+        .status-done .step-text { color: #059669; } /* Green for done */
+        .status-error .step-text { color: #dc2626; } /* Red for error */
+        /* Model Info Display Styling */
+        #modelInfoDisplay {
+            font-size: 0.8rem;
+            color: #6b7280; /* Medium gray */
+            margin-top: 0.25rem;
+        }
+        /* Data Stats Paragraph Styling */
+        .data-stats p {
+            margin-bottom: 0.25rem;
+        }
+        /* Custom select arrow */
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem; /* Make space for the arrow */
+        }
+    </style>
+</head>
+<body class="bg-gray-50 p-4 md:p-8">
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-lg">
+        <div class="flex justify-between items-center mb-6 border-b pb-4">
+             <h1 class="text-2xl md:text-3xl font-bold text-gray-800">
+                <i class="fas fa-cogs text-blue-600 mr-2"></i> Bảng Điều Khiển Quản Lý Mô Hình </h1>
+             <a href="{{ url_for('index') if url_for else '/' }}" class="text-blue-500 hover:text-blue-700 text-sm">
+                <i class="fas fa-home mr-1"></i> Trang Chủ </a>
+        </div>
+
+        <div id="statusMessage" class="mb-4 p-3 rounded-lg text-center hidden"></div>
+
+        <div id="trainingProgressContainer" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg hidden">
+            <h3 class="text-lg font-semibold text-blue-800 mb-2">Tiến trình huấn luyện:</h3> <ul id="trainingProgress" class="list-none text-sm">
+                </ul>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-info-circle mr-2 text-gray-500"></i> Trạng Thái Mô Hình Hiện Tại </h2>
+                    <div id="modelStatus" class="mb-1 p-3 bg-white rounded shadow-sm">
+                        <p class="text-gray-600">Đang kiểm tra...</p> </div>
+                    <p id="modelInfoDisplay" class="px-3 pb-3 text-gray-500 text-xs italic bg-white rounded shadow-sm">Loại model: (Đang kiểm tra...)</p> </div>
+
+                <div id="modelMetrics" class="space-y-3 hidden p-3 bg-white rounded shadow-sm">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-700 border-b pb-1 mb-2">Các Chỉ Số Hiệu Suất</h3> <p><strong class="text-gray-600">Accuracy:</strong> <span id="accuracy" class="font-mono text-blue-700">N/A</span>%</p>
+                        <p><strong class="text-gray-600">Precision:</strong> <span id="precision" class="font-mono text-green-700">N/A</span>%</p>
+                        <p><strong class="text-gray-600">Recall:</strong> <span id="recall" class="font-mono text-yellow-700">N/A</span>%</p>
+                        <p><strong class="text-gray-600">F1-Score:</strong> <span id="f1_score" class="font-mono text-purple-700">N/A</span>%</p>
+                        <p><strong class="text-gray-600">AUC:</strong> <span id="auc" class="font-mono text-red-700">N/A</span>%</p>
+                    </div>
+                    <div class="data-stats border-t pt-3">
+                        <h4 class="text-md font-medium text-gray-600 mb-1">Thống kê Dữ liệu Huấn luyện</h4> <p><strong class="text-gray-500">Tổng số mẫu:</strong> <span id="training_samples" class="font-mono text-gray-700">N/A</span></p> <p><strong class="text-gray-500">Số mẫu INBOX:</strong> <span id="inbox_samples" class="font-mono text-gray-700">N/A</span></p> <p><strong class="text-gray-500">Số mẫu TRASH:</strong> <span id="trash_samples" class="font-mono text-gray-700">N/A</span></p> <p><strong class="text-gray-500">Số đặc trưng (Features):</strong> <span id="features" class="font-mono text-gray-700">N/A</span></p> </div>
+                    <div id="confusionMatrixContainer" class="border-t pt-3">
+                        <h4 class="text-md font-medium text-gray-600 mb-1">Ma trận nhầm lẫn:</h4> <div id="confusionMatrix" class="overflow-x-auto">
+                            </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t">
+                    <label for="modelSelector" class="block text-sm font-medium text-gray-700 mb-1">Chọn loại model để huấn luyện:</label> <select id="modelSelector" name="modelSelector" class="w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                        <option value="random_forest" selected>Random Forest</option>
+                        <option value="logistic_regression">Logistic Regression</option>
+                        <option value="svm">Linear SVM (LinearSVC)</option>
+                    </select>
+
+                    <button id="trainButton" type="button"
+                            onclick="trainModel();" class="mt-4 w-full flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-play mr-2"></i>
+                        <span id="trainButtonText">Huấn luyện Mô hình Mới</span> </button>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 flex flex-col items-center justify-center">
+                 <h2 class="text-xl font-semibold text-gray-700 mb-4">
+                    <i class="fas fa-chart-line mr-2 text-gray-500"></i> Biểu Đồ ROC Curve </h2>
+                <div id="plotContainer" class="w-full h-64 md:h-80 bg-white rounded shadow-sm flex items-center justify-center overflow-hidden">
+                    <img id="rocPlot" src="" alt="Biểu đồ ROC Curve sẽ hiển thị ở đây" class="max-w-full max-h-full object-contain hidden">
+                     <p id="plotPlaceholder" class="text-gray-500">Chưa có biểu đồ. Hãy huấn luyện mô hình.</p> </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- UI Element References ---
+        const modelStatusDiv = document.getElementById('modelStatus');
+        const modelInfoDisplayP = document.getElementById('modelInfoDisplay');
+        const modelMetricsDiv = document.getElementById('modelMetrics');
+        const accuracySpan = document.getElementById('accuracy');
+        const precisionSpan = document.getElementById('precision');
+        const recallSpan = document.getElementById('recall');
+        const f1ScoreSpan = document.getElementById('f1_score');
+        const aucSpan = document.getElementById('auc');
+        const trainingSamplesSpan = document.getElementById('training_samples');
+        const inboxSamplesSpan = document.getElementById('inbox_samples');
+        const trashSamplesSpan = document.getElementById('trash_samples');
+        const featuresSpan = document.getElementById('features');
+        const confusionMatrixContainer = document.getElementById('confusionMatrixContainer');
+        const confusionMatrixDiv = document.getElementById('confusionMatrix');
+        const rocPlotImg = document.getElementById('rocPlot');
+        const plotPlaceholder = document.getElementById('plotPlaceholder');
+        const plotContainer = document.getElementById('plotContainer');
+        const trainButton = document.getElementById('trainButton');
+        const trainButtonText = document.getElementById('trainButtonText');
+        const statusMessageDiv = document.getElementById('statusMessage');
+        const trainingProgressContainer = document.getElementById('trainingProgressContainer');
+        const trainingProgressUl = document.getElementById('trainingProgress');
+        const modelSelector = document.getElementById('modelSelector');
+
+        // --- Utility Functions ---
+
+        /**
+         * Displays a status message to the user.
+         * @param {string} message - The message text to display.
+         * @param {boolean} [isError=false] - If true, styles the message as an error.
+         */
+        function showStatusMessage(message, isError = false) {
+            console.log(`showStatusMessage: Displaying ${isError ? 'error' : 'success'} message: "${message}"`);
+            if (!statusMessageDiv) return;
+            statusMessageDiv.textContent = message;
+            statusMessageDiv.classList.remove('hidden', 'bg-green-100', 'text-green-700', 'bg-red-100', 'text-red-700');
+            if (isError) {
+                statusMessageDiv.classList.add('bg-red-100', 'text-red-700');
+            } else {
+                statusMessageDiv.classList.add('bg-green-100', 'text-green-700');
+            }
+        }
+
+        /** Hides the status message area. */
+        function hideStatusMessage() {
+            console.log("hideStatusMessage: Hiding status message.");
+            if (!statusMessageDiv) return;
+            statusMessageDiv.classList.add('hidden');
+            statusMessageDiv.textContent = ''; // Clear content
+        }
+
+        /**
+         * Displays the confusion matrix in a table.
+         * Assumes matrix is a 2x2 array: [[TN, FP], [FN, TP]]
+         * @param {Array<Array<number>>} matrix - The confusion matrix data.
+         */
+        function displayConfusionMatrix(matrix) {
+            console.log("displayConfusionMatrix: Received matrix:", matrix);
+            if (!confusionMatrixDiv || !confusionMatrixContainer) {
+                console.error("displayConfusionMatrix: Matrix div or container not found.");
+                return;
+            }
+            if (!matrix || !Array.isArray(matrix) || matrix.length !== 2 || !Array.isArray(matrix[0]) || matrix[0].length !== 2 || !Array.isArray(matrix[1]) || matrix[1].length !== 2) {
+                console.error("displayConfusionMatrix: Invalid matrix format. Expected 2x2 array.", matrix);
+                confusionMatrixDiv.innerHTML = '<p class="text-red-500 text-sm">Dữ liệu ma trận không hợp lệ.</p>'; // Invalid matrix data.
+                confusionMatrixContainer.classList.remove('hidden'); // Show the container to display the error
+                return;
+            }
+
+            const [tn, fp] = matrix[0];
+            const [fn, tp] = matrix[1];
+            console.log(`displayConfusionMatrix: TN=${tn}, FP=${fp}, FN=${fn}, TP=${tp}`);
+
+            // Create the table HTML structure
+            const tableHTML = `
+                <table class="w-full text-sm confusion-matrix">
+                    <thead>
+                        <tr>
+                            <th></th> <th class="font-medium text-gray-600">Dự đoán: Keep (0)</th> <th class="font-medium text-gray-600">Dự đoán: Delete (1)</th> </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th class="font-medium text-gray-600">Thực tế: Keep (0)</th> <td class="font-mono">${tn} (TN)</td> <td class="font-mono">${fp} (FP)</td> </tr>
+                        <tr>
+                            <th class="font-medium text-gray-600">Thực tế: Delete (1)</th> <td class="font-mono">${fn} (FN)</td> <td class="font-mono">${tp} (TP)</td> </tr>
+                    </tbody>
+                </table>
+            `;
+            confusionMatrixDiv.innerHTML = tableHTML;
+            confusionMatrixContainer.classList.remove('hidden'); // Make sure container is visible
+            console.log("displayConfusionMatrix: Matrix table generated and displayed.");
+        }
+
+        /**
+         * Updates the metrics display area with data from the backend.
+         * @param {object} metrics - The metrics object from the /check_model or /train_model response.
+         */
+        function updateMetricsDisplay(metrics) {
+            console.log("updateMetricsDisplay: Received metrics data:", metrics);
+            if (!modelMetricsDiv) {
+                console.error("updateMetricsDisplay: modelMetricsDiv not found.");
+                return;
+            }
+            // Helper to safely get metric value or return 'N/A'
+            const getMetric = (key, defaultValue = 'N/A') => metrics?.[key] ?? defaultValue;
+            const formatMetric = (key, defaultValue = 'N/A') => {
+                const value = metrics?.[key];
+                // Check if value is a number before formatting
+                return (typeof value === 'number' && !isNaN(value)) ? value.toFixed(2) : defaultValue;
+            }
+
+            // Update metric spans
+            if (accuracySpan) accuracySpan.textContent = formatMetric('accuracy');
+            if (precisionSpan) precisionSpan.textContent = formatMetric('precision');
+            if (recallSpan) recallSpan.textContent = formatMetric('recall');
+            if (f1ScoreSpan) f1ScoreSpan.textContent = formatMetric('f1_score');
+            if (aucSpan) aucSpan.textContent = formatMetric('auc', (metrics?.auc === null ? 'N/A' : 'N/A')); // Handle null AUC specifically
+
+            // Update data statistics spans
+            if (trainingSamplesSpan) trainingSamplesSpan.textContent = getMetric('training_samples_total', getMetric('training_samples', 'N/A')); // Handle potential naming difference
+            if (inboxSamplesSpan) inboxSamplesSpan.textContent = getMetric('training_samples_inbox', getMetric('inbox_samples', 'N/A'));
+            if (trashSamplesSpan) trashSamplesSpan.textContent = getMetric('training_samples_trash', getMetric('trash_samples', 'N/A'));
+            if (featuresSpan) featuresSpan.textContent = getMetric('features_count', getMetric('features', 'N/A'));
+
+            // Display confusion matrix if available
+            if (metrics.confusion_matrix) {
+                displayConfusionMatrix(metrics.confusion_matrix);
+            } else {
+                console.log("updateMetricsDisplay: No confusion matrix data found in metrics.");
+                if (confusionMatrixContainer) confusionMatrixContainer.classList.add('hidden'); // Hide if no data
+            }
+
+            // Make the whole metrics section visible
+            modelMetricsDiv.classList.remove('hidden');
+            console.log("updateMetricsDisplay: Metrics display updated and made visible.");
+        }
+
+
+        /** Loads the ROC plot image from the backend. */
+        function loadPlot() {
+            console.log("loadPlot: Function called.");
+            if (!rocPlotImg || !plotPlaceholder || !plotContainer) {
+                console.error("loadPlot: Plot image, placeholder, or container element not found!");
+                return;
+            }
+            // Add a timestamp query parameter to prevent browser caching issues
+            const timestamp = new Date().getTime();
+            const plotUrl = `/get_plot?t=${timestamp}`;
+            console.log("loadPlot: Setting rocPlotImg src to:", plotUrl);
+
+            // Reset visibility: show placeholder, hide image
+            rocPlotImg.classList.add('hidden');
+            plotPlaceholder.textContent = "Đang tải biểu đồ..."; // Loading plot...
+            plotPlaceholder.classList.remove('hidden');
+            plotContainer.classList.remove('hidden'); // Ensure container is visible
+
+            rocPlotImg.src = plotUrl; // Set the source to trigger loading
+
+            // Event handler for successful image load
+            rocPlotImg.onload = () => {
+                console.log("loadPlot: Image loaded successfully.");
+                rocPlotImg.classList.remove('hidden'); // Show the loaded image
+                plotPlaceholder.classList.add('hidden'); // Hide the placeholder
+            };
+
+            // Event handler for image loading errors
+            rocPlotImg.onerror = () => {
+                console.error("loadPlot: Failed to load plot image from:", plotUrl);
+                rocPlotImg.classList.add('hidden'); // Keep image hidden
+                plotPlaceholder.textContent = "Lỗi tải biểu đồ. Hãy thử huấn luyện lại."; // Error loading plot. Try training again.
+                plotPlaceholder.classList.remove('hidden'); // Show error placeholder
+            };
+        }
+
+        // --- Core Functions ---
+
+        /** Fetches the current model status and metrics from the backend. */
+        async function checkModelStatus() {
+            console.log("checkModelStatus: Starting status check...");
+            hideStatusMessage(); // Clear any previous messages
+
+            // Ensure essential elements exist
+            if (!modelStatusDiv || !modelInfoDisplayP || !modelMetricsDiv || !rocPlotImg || !plotPlaceholder || !plotContainer) {
+                console.error("checkModelStatus Error: One or more required UI elements are missing.");
+                if(modelStatusDiv) modelStatusDiv.innerHTML = '<p class="text-red-600">Lỗi giao diện: Thiếu phần tử.</p>'; // UI Error: Missing element.
+                return;
+            }
+
+            // Reset UI elements to loading/default state
+            trainingProgressContainer.classList.add('hidden'); // Hide training progress if visible
+            modelStatusDiv.innerHTML = '<p class="text-gray-600"><i class="fas fa-spinner fa-spin mr-1"></i> Đang kiểm tra...</p>'; // Checking...
+            modelInfoDisplayP.textContent = 'Loại model: (Đang kiểm tra...)'; // Model type: (Checking...)
+            console.log("checkModelStatus: Hiding modelMetricsDiv and plot initially.");
+            modelMetricsDiv.classList.add('hidden');
+            rocPlotImg.classList.add('hidden');
+            plotPlaceholder.textContent = "Chưa có biểu đồ. Hãy huấn luyện mô hình."; // No plot yet. Train a model.
+            plotPlaceholder.classList.remove('hidden');
+            plotContainer.classList.remove('hidden'); // Make sure container is visible
+
+            try {
+                console.log("checkModelStatus: Fetching /check_model API endpoint...");
+                const response = await fetch('/check_model');
+                console.log("checkModelStatus: Received response. Status:", response.status);
+
+                let data;
+                try {
+                    // Attempt to parse JSON, handle potential errors
+                    data = await response.json();
+                    console.log("checkModelStatus: Parsed response data:", data);
+                } catch (e) {
+                    // Throw specific error if JSON parsing fails
+                    throw new Error(`Lỗi đọc phản hồi JSON từ máy chủ (status ${response.status})`); // Error reading JSON response from server
+                }
+
+                // Check if the HTTP response itself was successful
+                if (!response.ok) {
+                    // Use error message from backend if available, otherwise use status code
+                    throw new Error(data.error || `Lỗi HTTP từ máy chủ: ${response.status}`); // HTTP error from server
+                }
+
+                // Process the successful response data
+                if (data.model_exists) {
+                    modelStatusDiv.innerHTML = '<p class="text-green-600 font-semibold"><i class="fas fa-check-circle mr-1"></i> Đã tìm thấy mô hình đã lưu.</p>'; // Found saved model.
+                    // Display model type, handle case where it might be missing from metrics
+                    modelInfoDisplayP.textContent = data.model_type ? `Loại model: ${data.model_type}` : `Loại model: (Không xác định)`; // Model type: (Unknown)
+
+                    // Check if valid metrics data is present
+                    if (data.model_metrics && typeof data.model_metrics === 'object' && Object.keys(data.model_metrics).length > 0) {
+                        console.log("checkModelStatus: Valid metrics found. Updating display and loading plot...");
+                        updateMetricsDisplay(data.model_metrics); // Update the metrics table/stats
+                        loadPlot(); // Attempt to load the corresponding plot
+                    } else {
+                         // Model exists, but no metrics found
+                         console.log("checkModelStatus: Model exists, but no valid metrics found. Hiding metrics div.");
+                         modelStatusDiv.innerHTML += '<p class="text-yellow-600 text-sm mt-1"><i class="fas fa-exclamation-triangle mr-1"></i> Không tìm thấy dữ liệu metrics cho model này.</p>'; // No metrics data found for this model.
+                         modelMetricsDiv.classList.add('hidden'); // Hide the metrics section
+                         if (!data.model_type) modelInfoDisplayP.textContent = `Loại model: (Không xác định - thiếu metrics)`; // Model type: (Unknown - missing metrics)
+                    }
+                } else {
+                    // Model file does not exist
+                    console.log("checkModelStatus: Model file does not exist. Hiding metrics div.");
+                    modelStatusDiv.innerHTML = '<p class="text-orange-600 font-semibold"><i class="fas fa-times-circle mr-1"></i> Chưa có mô hình nào được huấn luyện.</p>'; // No model has been trained yet.
+                    modelInfoDisplayP.textContent = 'Loại model: (Chưa có model)'; // Model type: (No model yet)
+                    modelMetricsDiv.classList.add('hidden'); // Hide metrics section
+                    rocPlotImg.classList.add('hidden'); // Hide plot image
+                    plotPlaceholder.textContent = "Chưa có biểu đồ. Hãy huấn luyện mô hình."; // No plot yet. Train a model.
+                    plotPlaceholder.classList.remove('hidden'); // Show placeholder
+                }
+
+                // Display any additional error message reported by the backend (even on success status)
+                 if (data.error) {
+                     console.warn("checkModelStatus: Backend reported a non-fatal error:", data.error);
+                     // Append warning to status or use showStatusMessage
+                     modelStatusDiv.innerHTML += `<p class="text-yellow-700 text-sm mt-1">Cảnh báo: ${data.error}</p>`; // Warning: ...
+                 }
+
+            } catch (error) {
+                // Handle fetch errors (network, JSON parsing, server errors)
+                console.error('checkModelStatus: CATCH block executed. Error:', error);
+                modelStatusDiv.innerHTML = `<p class="text-red-600 font-semibold"><i class="fas fa-exclamation-circle mr-1"></i> Lỗi khi kiểm tra trạng thái: ${error.message}</p>`; // Error checking status: ...
+                modelInfoDisplayP.textContent = 'Loại model: (Lỗi)'; // Model type: (Error)
+                modelMetricsDiv.classList.add('hidden'); // Hide metrics on error
+                rocPlotImg.classList.add('hidden'); // Hide plot on error
+                plotPlaceholder.textContent = "Lỗi khi kiểm tra trạng thái model."; // Error checking model status.
+                plotPlaceholder.classList.remove('hidden'); // Show error placeholder
+            } finally {
+                 console.log("checkModelStatus: Status check finished.");
+                 // Any final cleanup if needed
+            }
+        }
+
+
+        /** Initiates the model training process via the backend API. */
+        async function trainModel() {
+            console.log("trainModel: Function execution started.");
+
+            // --- 0. Pre-checks ---
+            if (!trainButton || !trainButtonText || !trainingProgressUl || !trainingProgressContainer || !modelSelector) {
+                console.error("trainModel FATAL ERROR: Essential UI elements are missing from the page!");
+                showStatusMessage("Lỗi giao diện người dùng nghiêm trọng. Không thể bắt đầu huấn luyện.", true); // Critical UI error. Cannot start training.
+                return;
+            }
+            console.log("trainModel: All essential UI elements found.");
+            const selectedModelValue = modelSelector.value;
+            console.log(`trainModel: Selected model type for training: ${selectedModelValue}`);
+
+            // --- 1. Setup UI for Training ---
+            console.log("trainModel: Setting up UI for training state...");
+            trainButton.disabled = true; // Disable button during training
+            trainButtonText.textContent = 'Đang xử lý...'; // Processing...
+            hideStatusMessage(); // Clear previous status messages
+            trainingProgressUl.innerHTML = ''; // Clear previous progress steps
+            trainingProgressContainer.classList.remove('hidden'); // Show the progress container
+            modelMetricsDiv.classList.add('hidden'); // Hide old metrics
+            rocPlotImg.classList.add('hidden'); // Hide old plot
+            plotPlaceholder.textContent = "Đang huấn luyện, biểu đồ sẽ xuất hiện sau..."; // Training, plot will appear later...
+            plotPlaceholder.classList.remove('hidden');
+
+            // Define the steps for visual progress
+            const steps = [
+                { id: 'init', text: 'Khởi tạo quá trình huấn luyện...' }, // Initializing training process...
+                { id: 'fetch', text: 'Đang lấy dữ liệu email từ Gmail...' }, // Fetching email data from Gmail...
+                { id: 'preprocess', text: 'Đang tiền xử lý và vector hóa dữ liệu...' }, // Preprocessing and vectorizing data...
+                { id: 'train', text: `Đang huấn luyện model ${selectedModelValue}...` }, // Training model ...
+                { id: 'evaluate', text: 'Đang đánh giá hiệu suất model...' }, // Evaluating model performance...
+                { id: 'save', text: 'Đang lưu model và kết quả...' } // Saving model and results...
+            ];
+
+            // Add steps to the progress list UI
+            steps.forEach((step, index) => {
+                const li = document.createElement('li');
+                li.id = `step-${step.id}`;
+                li.classList.add('status-pending'); // Start as pending
+                li.innerHTML = `
+                    <div class="step-main">
+                        <span class="status-icon"><div class="spinner"></div></span>
+                        <span class="step-text">${step.text}</span>
+                    </div>
+                    <span class="step-result"></span>
+                `;
+                trainingProgressUl.appendChild(li);
+            });
+
+            // Helper function to update the visual status of a step (icon)
+            const updateStepVisualStatus = (stepId, status) => { // status: 'pending', 'done', 'error'
+                const stepLi = document.getElementById(`step-${stepId}`);
+                if (!stepLi) return;
+                stepLi.classList.remove('status-pending', 'status-done', 'status-error');
+                stepLi.classList.add(`status-${status}`);
+                const iconSpan = stepLi.querySelector('.status-icon');
+                if (iconSpan) {
+                    if (status === 'done') iconSpan.innerHTML = '<i class="fas fa-check-circle"></i>';
+                    else if (status === 'error') iconSpan.innerHTML = '<i class="fas fa-times-circle"></i>';
+                    else iconSpan.innerHTML = '<div class="spinner"></div>'; // Pending
+                }
+            };
+
+            // Helper function to update the result text of a step
+            const updateStepResultText = (stepId, resultText) => {
+                const stepLi = document.getElementById(`step-${stepId}`);
+                const resultSpan = stepLi?.querySelector('.step-result');
+                if (resultSpan) resultSpan.textContent = resultText;
+            };
+
+            // --- 2. Simulate Visual Progress (Optional but improves UX) ---
+            // This makes the steps appear to progress even before the backend responds.
+            let currentStepIndex = 0;
+            let simulationTimer = null;
+            const simulateVisualProgress = () => {
+                if (currentStepIndex < steps.length) {
+                    if (currentStepIndex > 0) {
+                        updateStepVisualStatus(steps[currentStepIndex - 1].id, 'done');
+                        // updateStepResultText(steps[currentStepIndex - 1].id, 'Hoàn thành'); // Optional: Mark previous as 'Completed'
+                    }
+                    updateStepVisualStatus(steps[currentStepIndex].id, 'pending'); // Ensure current is pending spinner
+                    currentStepIndex++;
+                    // Schedule next simulation step (adjust timing as needed)
+                    simulationTimer = setTimeout(simulateVisualProgress, 1500 + Math.random() * 1000); // Simulate variable step time
+                } else {
+                    // Simulation reached the end, clear timer
+                    if (simulationTimer) clearTimeout(simulationTimer);
+                    simulationTimer = null;
+                     console.log("trainModel: Visual simulation completed.");
+                }
+            };
+            // Start the simulation immediately
+            simulationTimer = setTimeout(simulateVisualProgress, 50); // Start quickly
+
+            // --- 3. Start Actual Backend Training Request ---
+            let trainingSuccess = false; // Flag to track outcome
+            const fetchOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json' // Indicate we expect JSON back
+                },
+                body: JSON.stringify({ selected_model: selectedModelValue }) // Send selected model type
+            };
+
+            console.log("trainModel: Sending fetch request to /train_model with options:", fetchOptions);
+            try {
+                const response = await fetch('/train_model', fetchOptions);
+                console.log("trainModel: Received response from /train_model. Status:", response.status);
+
+                const data = await response.json(); // Assume backend always returns JSON
+                console.log("trainModel: Parsed response data from /train_model.");
+
+                // Check if backend indicated failure via HTTP status
+                if (!response.ok) {
+                    // Throw error using message from backend JSON if available
+                    throw new Error(data.error || `Lỗi không xác định từ máy chủ (status ${response.status})`); // Unknown server error
+                }
+
+                // Check if the success response contains expected data (e.g., accuracy)
+                if (!data || typeof data.accuracy === 'undefined') {
+                    console.error("trainModel: Backend response OK, but metrics data is missing or invalid.", data);
+                    throw new Error("Dữ liệu metrics trả về từ máy chủ không hợp lệ."); // Invalid metrics data returned from server.
+                }
+
+                // --- 4. Handle SUCCESSFUL Backend Response ---
+                console.log("trainModel: Training fetch successful. Updating UI with results...");
+                trainingSuccess = true;
+                if (simulationTimer) clearTimeout(simulationTimer); // Stop visual simulation
+                simulationTimer = null;
+
+                // Mark all steps as done visually
+                steps.forEach(step => updateStepVisualStatus(step.id, 'done'));
+                // Optionally add final result text to last step
+                updateStepResultText(steps[steps.length - 1].id, `Hoàn thành! Acc: ${data.accuracy.toFixed(1)}%`); // Completed! Acc: ...%
+
+                // Show success message
+                showStatusMessage(data.message || "Huấn luyện model thành công!", false); // Training successful!
+
+                // Update the main status display
+                modelStatusDiv.innerHTML = '<p class="text-green-600 font-semibold"><i class="fas fa-check-circle mr-1"></i> Đã huấn luyện và lưu model thành công.</p>'; // Trained and saved model successfully.
+                modelInfoDisplayP.textContent = `Loại model: ${data.model_type || selectedModelValue}`; // Model type: ...
+
+                // Update the metrics display with the new results
+                console.log("trainModel: Calling updateMetricsDisplay with new data...");
+                updateMetricsDisplay(data);
+                console.log("trainModel: updateMetricsDisplay finished.");
+
+                // Load the newly generated plot
+                 console.log("trainModel: Calling loadPlot after successful training...");
+                 loadPlot(); // Load the plot corresponding to the new model
+
+            } catch (error) {
+                // --- 5. Handle FAILED Backend Response or Fetch Error ---
+                trainingSuccess = false;
+                console.error('trainModel: CATCH block executed. Training failed. Error:', error);
+                if (simulationTimer) clearTimeout(simulationTimer); // Stop simulation if running
+                simulationTimer = null;
+
+                // Mark the step where error likely occurred (or last simulated step)
+                const errorStepIndex = Math.min(currentStepIndex > 0 ? currentStepIndex -1 : 0, steps.length - 1); // Mark the step that was 'in progress'
+                const errorStepId = steps[errorStepIndex].id;
+                updateStepVisualStatus(errorStepId, 'error');
+                updateStepResultText(errorStepId, `Lỗi`); // Error
+
+                // Mark subsequent steps as cancelled/error
+                for (let i = errorStepIndex + 1; i < steps.length; i++) {
+                    updateStepVisualStatus(steps[i].id, 'error'); // Mark as error visually
+                    updateStepResultText(steps[i].id, `Bị hủy`); // Cancelled
+                }
+
+                // Show error message to user
+                showStatusMessage(`Lỗi trong quá trình huấn luyện: ${error.message}`, true); // Error during training: ...
+
+                // Reset main status (optional, could show error state)
+                // modelStatusDiv.innerHTML = '<p class="text-red-600 font-semibold"><i class="fas fa-exclamation-circle mr-1"></i> Huấn luyện thất bại.</p>'; // Training failed.
+                // modelInfoDisplayP.textContent = 'Loại model: (Lỗi huấn luyện)'; // Model type: (Training error)
+                // Keep old metrics hidden if training failed
+                modelMetricsDiv.classList.add('hidden');
+                rocPlotImg.classList.add('hidden');
+                plotPlaceholder.textContent = "Huấn luyện thất bại. Hãy thử lại."; // Training failed. Please try again.
+                plotPlaceholder.classList.remove('hidden');
+
+
+            } finally {
+                // --- 6. Final UI Cleanup (Always Runs) ---
+                console.log("trainModel: Running finally block. Training success status:", trainingSuccess);
+                // Ensure simulation timer is cleared
+                 if (simulationTimer) clearTimeout(simulationTimer);
+
+                 // Force visual finalization of all steps based on success flag
+                 steps.forEach((step, index) => {
+                     const stepLi = document.getElementById(`step-${step.id}`);
+                     if (stepLi && !stepLi.classList.contains('status-done') && !stepLi.classList.contains('status-error')) {
+                         // If a step wasn't explicitly marked done/error (e.g., simulation stopped early)
+                         updateStepVisualStatus(step.id, trainingSuccess ? 'done' : 'error');
+                         updateStepResultText(step.id, trainingSuccess ? '' : (index === errorStepIndex ? 'Lỗi' : 'Bị hủy'));
+                     }
+                 });
+
+                // Re-enable the train button
+                 if(trainButton) trainButton.disabled = false;
+                 if(trainButtonText) trainButtonText.textContent = 'Huấn luyện Mô hình Mới'; // Train New Model
+                 console.log("trainModel: UI cleanup finished.");
+
+                 // Optional: Refresh status after a short delay if training failed,
+                 // to show the previous model's state if it exists.
+                 // if (!trainingSuccess) {
+                 //     setTimeout(checkModelStatus, 2000);
+                 // }
+            }
+        }
+
+        // --- Initial Page Load ---
+        // Add event listener to run checks when the DOM is fully loaded
+        console.log("Global scope: Adding DOMContentLoaded event listener...");
+        document.addEventListener('DOMContentLoaded', () => {
+             console.log("DOMContentLoaded event fired. Starting initial setup.");
+
+             // Optional: Log if key elements are found (for debugging)
+             if (!modelStatusDiv) console.error("DOMContentLoaded Error: modelStatusDiv not found!");
+             if (!trainButton) console.error("DOMContentLoaded Error: trainButton not found!");
+             // ... add checks for other critical elements if needed
+
+             // Perform the initial check for model status and metrics
+             console.log("DOMContentLoaded: Calling checkModelStatus() for initial page load...");
+             checkModelStatus();
+        });
+
+    </script>
+
+</body>
+</html>

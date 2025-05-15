@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="vi"> <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trang Chủ - Clean Inbox AI</title> <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Apply Inter font globally */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-lg shadow-xl text-center max-w-lg w-full">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4">
+            <i class="fas fa-inbox text-blue-600 mr-2"></i> Clean Inbox AI
+        </h1>
+        <p class="text-gray-600 mb-8">
+            Chọn một chức năng để tiếp tục: </p>
+
+        <div class="flex flex-col sm:flex-row justify-center gap-4">
+            <a href="{{ url_for('model_management') }}" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg shadow transition duration-300 ease-in-out transform hover:-translate-y-1 flex items-center justify-center">
+                <i class="fas fa-tasks mr-2"></i> Quản lý Mô hình </a>
+
+            <a href="{{ url_for('predict_email_page') }}" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg shadow transition duration-300 ease-in-out transform hover:-translate-y-1 flex items-center justify-center">
+                <i class="fas fa-magic mr-2"></i> Dự đoán Email </a>
+        </div>
+    </div>
+</body>
+</html>

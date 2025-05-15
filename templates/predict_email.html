@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xử Lý Email Tự Động - Clean Inbox AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Apply Inter font */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Slightly lighter gray background */
+        }
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border-left-color: #3b82f6; /* Blue */
+            animation: spin 1s ease infinite;
+        }
+        /* Small spinner for buttons */
+        .spinner-sm {
+             border: 2px solid rgba(0, 0, 0, 0.1);
+             width: 16px;
+             height: 16px;
+             border-radius: 50%;
+             border-left-color: currentColor; /* Use button's text color */
+             animation: spin 1s ease infinite;
+             display: inline-block;
+             vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Styling for individual email cards needing confirmation */
+        .email-card {
+            border: 1px solid #e5e7eb; /* Light gray border */
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background-color: #ffffff; /* White background for cards */
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* Subtle shadow */
+            transition: opacity 0.5s ease-out; /* For fade out effect */
+        }
+        .email-card strong {
+            color: #374151; /* Darker gray for labels */
+        }
+        /* Styling for email snippet preview */
+        .email-snippet {
+            font-size: 0.875rem; /* Small text */
+            color: #6b7280; /* Medium gray */
+            max-height: 3rem; /* Limit height to roughly 2 lines */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2; /* Limit to 2 lines */
+            -webkit-box-orient: vertical;
+        }
+        /* Styling for Keep/Delete action buttons */
+        .action-button {
+            padding: 0.3rem 0.8rem;
+            font-size: 0.875rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+            cursor: pointer; /* Indicate clickable */
+            display: inline-flex; /* Align icon and text */
+            align-items: center;
+            justify-content: center; /* Center content */
+            min-width: 80px; /* Ensure minimum width */
+        }
+        .keep-button { background-color: #10b981; color: white; } /* Green */
+        .keep-button:hover { background-color: #059669; } /* Darker green */
+        .delete-button { background-color: #ef4444; color: white; } /* Red */
+        .delete-button:hover { background-color: #dc2626; } /* Darker red */
+        /* Styling for Restore button */
+        .restore-button {
+            background-color: #6b7280; /* Gray */
+            color: white;
+            padding: 0.2rem 0.6rem; /* Smaller padding */
+            font-size: 0.75rem; /* Smaller text */
+            border-radius: 0.25rem;
+            transition: background-color 0.2s;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center; /* Center content */
+            min-width: 90px; /* Ensure minimum width */
+            margin-left: 0.5rem; /* Space between subject and button */
+        }
+        .restore-button:hover { background-color: #4b5563; } /* Darker gray */
+        .restore-button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .restore-button .spinner-sm { border-left-color: white; } /* White spinner */
+
+        /* Styling for Delete button in kept list */
+        .delete-kept-button {
+            background-color: #ef4444; /* Red */
+            color: white;
+            padding: 0.2rem 0.6rem; /* Smaller padding */
+            font-size: 0.75rem; /* Smaller text */
+            border-radius: 0.25rem;
+            transition: background-color 0.2s;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center; /* Center content */
+            min-width: 60px; /* Ensure minimum width */
+            margin-left: 0.5rem; /* Space between subject and button */
+        }
+        .delete-kept-button:hover { background-color: #dc2626; } /* Darker red */
+        .delete-kept-button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .delete-kept-button .spinner-sm { border-left-color: white; } /* White spinner */
+
+
+        /* Styling for disabled card during action confirmation */
+        .disabled-card {
+            opacity: 0.6;
+            pointer-events: none; /* Prevent interaction */
+        }
+        /* Styling for the lists of automatically processed emails */
+        .processed-list {
+            max-height: 200px; /* Limit height */
+            overflow-y: auto; /* Add scrollbar if needed */
+            padding: 0.5rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            background-color: #f9fafb;
+        }
+        .processed-list li {
+            padding: 0.25rem 0.5rem; /* Added horizontal padding */
+            border-bottom: 1px dashed #e5e7eb;
+            font-size: 0.875rem;
+            display: flex; /* Use flexbox for alignment */
+            justify-content: space-between; /* Space out content and button */
+            align-items: center;
+            transition: opacity 0.5s ease-out; /* For fade out */
+        }
+        .processed-list li:last-child {
+            border-bottom: none;
+        }
+        .processed-list .email-subject {
+            flex-grow: 1; /* Allow subject to take available space */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap; /* Prevent wrapping */
+            margin-right: 0.5rem; /* Space before button */
+        }
+        /* Ensure italic placeholder takes space */
+        .processed-list .italic {
+            display: block;
+            width: 100%;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-xl">
+
+        <div class="flex justify-between items-center mb-6 border-b pb-4">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-800">
+                <i class="fas fa-robot text-blue-600 mr-2"></i> Xử Lý Email Chưa Đọc
+            </h1>
+            <a href="{{ url_for('index') if url_for else '/' }}" class="text-blue-500 hover:text-blue-700 text-sm">
+                <i class="fas fa-home mr-1"></i> Trang Chủ
+            </a>
+        </div>
+
+        <div class="mb-6 text-center">
+            <button id="processButton" onclick="processUnreadEmails()"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mx-auto">
+                <i class="fas fa-cogs mr-2"></i>
+                <span id="processButtonText">Bắt đầu Xử lý Email Chưa Đọc</span>
+                <div id="processSpinner" class="spinner ml-3 hidden"></div>
+            </button>
+        </div>
+
+        <div id="statusMessage" class="mb-4 p-3 rounded-lg text-center hidden"></div>
+
+        <div id="summaryArea" class="mb-6 p-4 rounded-lg bg-gray-50 border border-gray-200 hidden">
+            <h3 class="text-lg font-semibold text-gray-700 mb-2">Kết quả Xử lý:</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                <p><i class="fas fa-envelope-open-text mr-2 text-blue-500"></i>Tổng số email đã xử lý: <strong id="summaryProcessed" class="text-blue-700">0</strong></p>
+                <p><i class="fas fa-trash-alt mr-2 text-red-500"></i>Số email tự động xóa: <strong id="summaryAutoDeleted" class="text-red-700">0</strong></p>
+                <p><i class="fas fa-save mr-2 text-green-500"></i>Số email tự động giữ lại: <strong id="summaryAutoKept" class="text-green-700">0</strong></p>
+                <p><i class="fas fa-question-circle mr-2 text-yellow-500"></i>Số email cần xác nhận: <strong id="summaryNeedsConfirmation" class="text-yellow-700">0</strong></p>
+            </div>
+            <div id="errorSummary" class="mt-3 hidden border-t pt-2">
+                 <p class="text-sm"><i class="fas fa-exclamation-triangle mr-2 text-red-500"></i>Số lỗi xảy ra: <strong id="summaryErrors" class="text-red-700">0</strong></p>
+                 <ul id="errorList" class="list-disc list-inside text-xs text-red-600 mt-1 max-h-20 overflow-y-auto">
+                 </ul>
+            </div>
+        </div>
+
+        <div id="processedEmailsArea" class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4 hidden">
+            <div>
+                <h4 class="text-md font-semibold text-red-600 mb-1"><i class="fas fa-trash-alt mr-1"></i> Email đã tự động xóa:</h4>
+                <ul id="autoDeletedList" class="processed-list">
+                    <li class="text-gray-400 italic">Không có</li>
+                </ul>
+            </div>
+             <div>
+                <h4 class="text-md font-semibold text-green-600 mb-1"><i class="fas fa-save mr-1"></i> Email đã tự động giữ lại:</h4>
+                <ul id="autoKeptList" class="processed-list">
+                     <li class="text-gray-400 italic">Không có</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="confirmationArea" class="hidden">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4 border-t pt-4">
+                <i class="fas fa-tasks mr-2 text-yellow-600"></i> Email cần bạn xác nhận:
+            </h3>
+            <div id="confirmationList">
+                <p id="noConfirmationNeeded" class="text-gray-500 italic">Không có email nào cần xác nhận.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- UI Element References ---
+        const processButton = document.getElementById('processButton');
+        const processButtonText = document.getElementById('processButtonText');
+        const processSpinner = document.getElementById('processSpinner');
+        const statusMessageDiv = document.getElementById('statusMessage');
+        // Summary elements
+        const summaryArea = document.getElementById('summaryArea');
+        const summaryProcessed = document.getElementById('summaryProcessed');
+        const summaryAutoDeleted = document.getElementById('summaryAutoDeleted');
+        const summaryAutoKept = document.getElementById('summaryAutoKept');
+        const summaryNeedsConfirmation = document.getElementById('summaryNeedsConfirmation');
+        const errorSummaryDiv = document.getElementById('errorSummary');
+        const summaryErrors = document.getElementById('summaryErrors');
+        const errorListUl = document.getElementById('errorList');
+        // Processed lists elements
+        const processedEmailsArea = document.getElementById('processedEmailsArea');
+        const autoDeletedListUl = document.getElementById('autoDeletedList');
+        const autoKeptListUl = document.getElementById('autoKeptList');
+        // Confirmation elements
+        const confirmationArea = document.getElementById('confirmationArea');
+        const confirmationListDiv = document.getElementById('confirmationList');
+        const noConfirmationNeededP = document.getElementById('noConfirmationNeeded');
+
+        // --- Helper Functions ---
+
+        /**
+         * Displays a status message.
+         * @param {string} message - The message text.
+         * @param {boolean} [isError=false] - True for error styling, false for success.
+         * @param {boolean} [isLoading=false] - True for loading styling.
+         */
+        function showStatus(message, isError = false, isLoading = false) {
+            console.log(`showStatus: Displaying ${isLoading ? 'loading' : (isError ? 'error' : 'success')} message: "${message}"`);
+            if (!statusMessageDiv) return;
+            statusMessageDiv.textContent = message;
+            let bgColorClass = 'bg-green-100 text-green-700'; // Default to success
+            if (isLoading) {
+                bgColorClass = 'bg-blue-100 text-blue-700';
+            } else if (isError) {
+                bgColorClass = 'bg-red-100 text-red-700';
+            }
+            statusMessageDiv.className = `mb-4 p-3 rounded-lg text-center ${bgColorClass}`; // Use className to replace all classes
+            statusMessageDiv.classList.remove('hidden');
+        }
+
+        /** Hides the status message area. */
+        function hideStatus() {
+            console.log("hideStatus: Hiding status message.");
+            if (!statusMessageDiv) return;
+            statusMessageDiv.classList.add('hidden');
+            statusMessageDiv.textContent = ''; // Clear content
+        }
+
+        /**
+         * Sets the loading state for the main process button and hides/clears results areas.
+         * @param {boolean} isLoading - True to enter loading state, false to exit.
+         */
+        function setLoadingState(isLoading) {
+            console.log(`setLoadingState: Setting loading state to ${isLoading}`);
+            if (!processButton || !processButtonText || !processSpinner || !summaryArea || !processedEmailsArea || !confirmationArea || !confirmationListDiv || !autoDeletedListUl || !autoKeptListUl || !noConfirmationNeededP || !errorListUl || !errorSummaryDiv) {
+                console.error("setLoadingState Error: One or more UI elements missing!");
+                return;
+            }
+
+            processButton.disabled = isLoading;
+            if (isLoading) {
+                processButtonText.textContent = 'Đang xử lý...'; // Processing...
+                processSpinner.classList.remove('hidden');
+
+                // Hide all result areas
+                summaryArea.classList.add('hidden');
+                processedEmailsArea.classList.add('hidden');
+                confirmationArea.classList.add('hidden');
+                errorSummaryDiv.classList.add('hidden');
+
+                // Clear dynamic content within result areas
+                confirmationListDiv.innerHTML = ''; // Clear confirmation cards
+                autoDeletedListUl.innerHTML = '<li class="text-gray-400 italic">Đang tải...</li>'; // Loading...
+                autoKeptListUl.innerHTML = '<li class="text-gray-400 italic">Đang tải...</li>'; // Loading...
+                noConfirmationNeededP.classList.add('hidden'); // Hide default text
+                errorListUl.innerHTML = ''; // Clear error list
+
+            } else {
+                processButtonText.textContent = 'Bắt đầu Xử lý Email Chưa Đọc'; // Start Processing Unread Emails
+                processSpinner.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Populates a <ul> element with processed emails, including a relevant action button.
+         * @param {HTMLUListElement} listElement - The <ul> element to populate.
+         * @param {Array<object>} emails - Array of email objects {id, subject, ...}.
+         * @param {string} listType - Identifier for the list ('deleted' or 'kept').
+         */
+        function populateProcessedList(listElement, emails, listType) {
+            console.log(`populateProcessedList: Populating list ${listElement.id} (${listType}) with ${emails?.length ?? 0} emails.`);
+            if (!listElement) {
+                console.error("populateProcessedList Error: Provided listElement is invalid.");
+                return;
+            }
+            listElement.innerHTML = ''; // Clear previous content
+
+            if (emails && emails.length > 0) {
+                emails.forEach(email => {
+                    const li = document.createElement('li');
+                    li.id = `processed-${listType}-${email.id}`; // Unique ID for the list item
+
+                    const subjectText = email?.subject ? email.subject.substring(0, 100) : '(Không có tiêu đề)'; // Truncate
+
+                    const subjectSpan = document.createElement('span');
+                    subjectSpan.className = 'email-subject';
+                    subjectSpan.textContent = subjectText;
+                    subjectSpan.title = email?.subject || ''; // Full subject on hover
+
+                    const actionButton = document.createElement('button');
+                    if (listType === 'deleted') {
+                        // Add Restore button for deleted list
+                        actionButton.className = 'restore-button';
+                        actionButton.innerHTML = '<i class="fas fa-undo mr-1"></i> Khôi phục'; // Restore
+                        actionButton.onclick = () => restoreEmail(email.id, listType, actionButton); // Pass button
+                    } else if (listType === 'kept') {
+                        // Add Delete button for kept list
+                        actionButton.className = 'delete-kept-button';
+                        actionButton.innerHTML = '<i class="fas fa-trash-alt mr-1"></i> Xóa'; // Delete
+                        actionButton.onclick = () => deleteKeptEmail(email.id, actionButton); // Pass button
+                    }
+
+                    li.appendChild(subjectSpan);
+                    if (actionButton) {
+                        li.appendChild(actionButton);
+                    }
+                    listElement.appendChild(li);
+                });
+            } else {
+                // Display "None" message if the list is empty
+                listElement.innerHTML = '<li class="text-gray-400 italic">Không có</li>'; // None
+            }
+        }
+
+
+        // --- Core Functions ---
+
+        /** Fetches and processes unread emails via the backend API. */
+        async function processUnreadEmails() {
+            console.log("processUnreadEmails: Starting...");
+            setLoadingState(true);
+            hideStatus();
+            showStatus("Đang yêu cầu xử lý email từ máy chủ...", false, true); // Requesting... (loading)
+
+            try {
+                console.log("processUnreadEmails: Fetching /api/process_unread_emails...");
+                const response = await fetch('/api/process_unread_emails', { method: 'POST' });
+                console.log("processUnreadEmails: Received response. Status:", response.status);
+
+                const data = await response.json();
+                console.log("processUnreadEmails: Parsed response data:", data);
+
+                if (!response.ok) {
+                    const errorMsg = data?.error || `Lỗi HTTP không xác định: ${response.status}`;
+                    throw new Error(errorMsg);
+                }
+
+                // --- Process Successful Response ---
+                console.log("processUnreadEmails: Updating summary area...");
+                summaryProcessed.textContent = data?.processed_count ?? 0;
+                summaryAutoDeleted.textContent = data?.auto_deleted_emails?.length ?? 0;
+                summaryAutoKept.textContent = data?.auto_kept_emails?.length ?? 0;
+                summaryNeedsConfirmation.textContent = data?.needs_confirmation?.length ?? 0;
+
+                console.log("processUnreadEmails: Checking for backend errors...");
+                if (data?.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+                    summaryErrors.textContent = data.errors.length;
+                    errorListUl.innerHTML = ''; // Clear previous errors
+                    data.errors.forEach(err => {
+                        const li = document.createElement('li');
+                        const errorSubject = err?.subject ? err.subject.substring(0, 50) + '...' : '(Không rõ tiêu đề)';
+                        li.textContent = `ID ${err?.id || 'N/A'}: ${err?.error || 'Lỗi không xác định'} (Subject: ${errorSubject})`;
+                        errorListUl.appendChild(li);
+                    });
+                    errorSummaryDiv.classList.remove('hidden');
+                    showStatus(`Hoàn thành xử lý với ${data.errors.length} lỗi. Vui lòng kiểm tra chi tiết.`, true, false); // Completed with errors
+                } else {
+                    errorSummaryDiv.classList.add('hidden');
+                    showStatus(data?.message || "Xử lý email hoàn tất thành công!", false, false); // Success
+                }
+                summaryArea.classList.remove('hidden');
+
+                console.log("processUnreadEmails: Populating processed email lists...");
+                populateProcessedList(autoDeletedListUl, data?.auto_deleted_emails, 'deleted');
+                populateProcessedList(autoKeptListUl, data?.auto_kept_emails, 'kept');
+                processedEmailsArea.classList.remove('hidden');
+
+                console.log("processUnreadEmails: Populating confirmation list...");
+                confirmationListDiv.innerHTML = ''; // Clear placeholder or old list
+                noConfirmationNeededP.classList.add('hidden'); // Hide 'no confirmation' message
+
+                if (data?.needs_confirmation && Array.isArray(data.needs_confirmation) && data.needs_confirmation.length > 0) {
+                    console.log(`processUnreadEmails: Found ${data.needs_confirmation.length} emails needing confirmation.`);
+                    data.needs_confirmation.forEach(email => {
+                        const card = document.createElement('div');
+                        card.className = 'email-card';
+                        card.id = `confirm-${email.id}`;
+
+                        const subject = email?.subject || '(Không có tiêu đề)';
+                        const snippet = email?.snippet || '(Không có nội dung xem trước)';
+                        const confDelete = email?.confidence_delete ?? 'N/A';
+                        const confKeep = email?.confidence_keep ?? 'N/A';
+
+                        card.innerHTML = `
+                            <p class="font-semibold mb-1" title="${subject}">${subject.substring(0, 100)}</p>
+                            <p class="email-snippet mb-2">${snippet}</p>
+                            <p class="text-sm mb-3">
+                                <span class="text-red-600">Độ tin cậy Xóa: <strong>${confDelete}%</strong></span> |
+                                <span class="text-green-600">Độ tin cậy Giữ: <strong>${confKeep}%</strong></span>
+                            </p>
+                            <div class="flex justify-end gap-2">
+                                <button class="action-button keep-button" onclick="confirmAction('${email.id}', 'keep', this)">
+                                    <i class="fas fa-save mr-1"></i> Giữ lại
+                                </button>
+                                <button class="action-button delete-button" onclick="confirmAction('${email.id}', 'delete', this)">
+                                    <i class="fas fa-trash-alt mr-1"></i> Xóa
+                                </button>
+                            </div>
+                        `;
+                        confirmationListDiv.appendChild(card);
+                    });
+                } else {
+                    console.log("processUnreadEmails: No emails require confirmation.");
+                    noConfirmationNeededP.classList.remove('hidden'); // Show 'no confirmation needed' text
+                }
+                 confirmationArea.classList.remove('hidden'); // Show the confirmation area
+
+            } catch (error) {
+                console.error('Error during processUnreadEmails:', error);
+                showStatus(`Lỗi nghiêm trọng khi xử lý emails: ${error.message}`, true); // Critical error
+                 summaryArea.classList.add('hidden');
+                 processedEmailsArea.classList.add('hidden');
+                 confirmationArea.classList.add('hidden');
+            } finally {
+                console.log("processUnreadEmails: Running finally block.");
+                setLoadingState(false); // Exit loading state
+            }
+        }
+
+        /**
+         * Sends the user's confirmation action (keep/delete) to the backend.
+         * @param {string} emailId - The ID of the email being confirmed.
+         * @param {string} action - The action chosen ('keep' or 'delete').
+         * @param {HTMLButtonElement} buttonElement - The button that was clicked.
+         */
+        async function confirmAction(emailId, action, buttonElement) {
+             console.log(`confirmAction: Confirming action '${action}' for email ID: ${emailId}`);
+            const card = document.getElementById(`confirm-${emailId}`);
+            if (!card) { console.error(`confirmAction Error: Card element with ID confirm-${emailId} not found.`); return; }
+            card.classList.add('disabled-card');
+            const buttons = card.querySelectorAll('button');
+            buttons.forEach(btn => btn.disabled = true);
+            const originalButtonText = buttonElement.innerHTML;
+            buttonElement.innerHTML = '<span class="spinner-sm" style="margin: auto; border-left-color: white;"></span>';
+            hideStatus();
+            try {
+                const emailSubjectElement = card.querySelector('.font-semibold');
+                const subject = emailSubjectElement ? emailSubjectElement.textContent : ''; // Get subject for logging
+                console.log(`confirmAction: Sending fetch request to /api/confirm_action for ID ${emailId}, action ${action}...`);
+                const response = await fetch('/api/confirm_action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email_id: emailId, action: action, subject: subject }), // Send subject too
+                });
+                const data = await response.json();
+                console.log("confirmAction: Received response. Status:", response.status, "Data:", data);
+                if (!response.ok) { throw new Error(data?.error || `Lỗi HTTP không xác định: ${response.status}`); }
+                console.log(`confirmAction: Action '${action}' successful for email ${emailId}.`);
+                showStatus(data?.message || `Hành động '${action}' thành công cho email ${emailId}.`, false); // Action successful
+                card.style.opacity = '0'; // Fade out
+                setTimeout(() => {
+                    card.remove();
+                    const remainingCards = confirmationListDiv.querySelectorAll('.email-card');
+                    if (remainingCards.length === 0) {
+                         console.log("confirmAction: Confirmation list is now empty.");
+                         noConfirmationNeededP.classList.remove('hidden'); // Show 'no confirmation needed'
+                    }
+                }, 500); // Remove after fade out
+            } catch (error) {
+                console.error(`Error confirming action '${action}' for ${emailId}:`, error);
+                showStatus(`Lỗi khi xác nhận hành động '${action}' cho email ${emailId}: ${error.message}`, true); // Error confirming action
+                card.classList.remove('disabled-card');
+                buttons.forEach(btn => btn.disabled = false);
+                buttonElement.innerHTML = originalButtonText; // Restore button text
+            }
+        }
+
+        /**
+         * Handles the click on a 'Restore' button in the 'deleted' list.
+         * Calls the /api/restore_email endpoint.
+         * @param {string} emailId - The ID of the email to restore.
+         * @param {string} originalListType - Should always be 'deleted' for this function.
+         * @param {HTMLButtonElement} buttonElement - The restore button that was clicked.
+         */
+        async function restoreEmail(emailId, originalListType, buttonElement) {
+            console.log(`restoreEmail: Attempting to restore email ID ${emailId} from list '${originalListType}'`);
+            if (!buttonElement) return;
+            buttonElement.disabled = true;
+            const originalButtonHtml = buttonElement.innerHTML;
+            buttonElement.innerHTML = '<span class="spinner-sm"></span>'; // Show spinner
+            hideStatus();
+
+            try {
+                console.log(`restoreEmail: Sending fetch request to /api/restore_email for ID ${emailId}...`);
+                const response = await fetch('/api/restore_email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email_id: emailId }),
+                });
+                const data = await response.json();
+                console.log("restoreEmail: Received response. Status:", response.status, "Data:", data);
+
+                if (!response.ok) {
+                    throw new Error(data?.error || `Lỗi HTTP không xác định: ${response.status}`);
+                }
+
+                // On success
+                showStatus(data?.message || `Đã khôi phục email ${emailId} thành công.`, false); // Restored successfully
+                const listItem = document.getElementById(`processed-${originalListType}-${emailId}`);
+                if (listItem) {
+                    listItem.style.opacity = '0'; // Fade out
+                    setTimeout(() => {
+                        listItem.remove();
+                        // Check if the list is now empty
+                        const listElement = autoDeletedListUl;
+                        if (listElement && listElement.children.length === 0) {
+                            listElement.innerHTML = '<li class="text-gray-400 italic">Không có</li>'; // None
+                        }
+                    }, 500); // Remove after fade out
+                }
+            } catch (error) {
+                // On error
+                console.error(`restoreEmail: Error for ${emailId}:`, error);
+                showStatus(`Lỗi khi cố gắng khôi phục ${emailId}: ${error.message}`, true); // Error trying to restore
+                buttonElement.disabled = false; // Re-enable button on error
+                buttonElement.innerHTML = originalButtonHtml; // Restore original button text
+            }
+        }
+
+        /**
+         * Handles the click on a 'Delete' button in the 'kept' list.
+         * Calls the /api/confirm_action endpoint with action 'delete'.
+         * @param {string} emailId - The ID of the email to delete.
+         * @param {HTMLButtonElement} buttonElement - The delete button that was clicked.
+         */
+        async function deleteKeptEmail(emailId, buttonElement) {
+            console.log(`deleteKeptEmail: Attempting to delete (move to trash) kept email ID ${emailId}`);
+            if (!buttonElement) return;
+            buttonElement.disabled = true;
+            const originalButtonHtml = buttonElement.innerHTML;
+            buttonElement.innerHTML = '<span class="spinner-sm"></span>'; // Show spinner
+            hideStatus();
+
+            try {
+                // Find the subject text from the list item for logging purposes
+                const listItem = document.getElementById(`processed-kept-${emailId}`);
+                const subjectElement = listItem ? listItem.querySelector('.email-subject') : null;
+                const subject = subjectElement ? subjectElement.textContent : '';
+
+                console.log(`deleteKeptEmail: Sending fetch request to /api/confirm_action for ID ${emailId}, action delete...`);
+                // Reuse confirm_action endpoint for deleting 'kept' emails
+                const response = await fetch('/api/confirm_action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email_id: emailId, action: 'delete', subject: subject }),
+                });
+                const data = await response.json();
+                console.log("deleteKeptEmail: Received response. Status:", response.status, "Data:", data);
+
+                if (!response.ok) {
+                    throw new Error(data?.error || `Lỗi HTTP không xác định: ${response.status}`);
+                }
+
+                // On success
+                showStatus(data?.message || `Đã xóa email ${emailId} thành công.`, false); // Deleted successfully
+                if (listItem) {
+                    listItem.style.opacity = '0'; // Fade out
+                    setTimeout(() => {
+                        listItem.remove();
+                        // Check if the list is now empty
+                        const listElement = autoKeptListUl;
+                        if (listElement && listElement.children.length === 0) {
+                            listElement.innerHTML = '<li class="text-gray-400 italic">Không có</li>'; // None
+                        }
+                    }, 500); // Remove after fade out
+                }
+
+            } catch (error) {
+                // On error
+                console.error(`deleteKeptEmail: Error for ${emailId}:`, error);
+                showStatus(`Lỗi khi cố gắng xóa ${emailId}: ${error.message}`, true); // Error trying to delete
+                buttonElement.disabled = false; // Re-enable button on error
+                buttonElement.innerHTML = originalButtonHtml; // Restore original button text
+            }
+        }
+
+
+        // --- Initial Page Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("predict_email.html: DOMContentLoaded event fired.");
+            // You could potentially trigger an initial check or process here if desired
+            // Example: processUnreadEmails(); // Uncomment to process automatically on load
+        });
+
+    </script>
+
+</body>
+</html>
